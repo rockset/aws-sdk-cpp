@@ -36,6 +36,7 @@ namespace Aws
             void Reload() override;
 
         private:
+            bool ExpiresSoon() const;
             void RefreshIfExpired();
             Aws::String CalculateQueryString() const;
 
