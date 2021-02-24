@@ -30,7 +30,28 @@ using Aws::Utils::Threading::ReaderLockGuard;
 using Aws::Utils::Threading::WriterLockGuard;
 
 static const char STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG[] = "STSAssumeRoleWithWebIdentityCredentialsProvider";
+
+namespace {
+Aws::Client::ClientConfiguration getDefaultClientConfiguration() {
+    Aws::Client::ClientConfiguration config;
+    config.scheme = Aws::Http::Scheme::HTTPS;
+
+    Aws::Vector<Aws::String> retryableErrors;
+    retryableErrors.push_back("IDPCommunicationError");
+    retryableErrors.push_back("InvalidIdentityToken");
+    config.retryStrategy = Aws::MakeShared<SpecifiedRetryableErrorsRetryStrategy>(
+            STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG, retryableErrors,
+            3 /*maxRetries*/);
+
+    return config;
+}
+}  // namespace
+
 STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentialsProvider() :
+    STSAssumeRoleWebIdentityCredentialsProvider(getDefaultClientConfiguration()) {}
+
+STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentialsProvider(
+        Aws::Client::ClientConfiguration clientConfiguration) :
     m_initialized(false)
 {
     // check environment variables
@@ -95,17 +116,9 @@ STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentials
         AWS_LOGSTREAM_DEBUG(STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG, "Resolved session_name from profile_config or environment variable to be " << m_sessionName);
     }
 
-    Aws::Client::ClientConfiguration config;
-    config.scheme = Aws::Http::Scheme::HTTPS;
-    config.region = tmpRegion;
+    clientConfiguration.region = tmpRegion;
 
-    Aws::Vector<Aws::String> retryableErrors;
-    retryableErrors.push_back("IDPCommunicationError");
-    retryableErrors.push_back("InvalidIdentityToken");
-
-    config.retryStrategy = Aws::MakeShared<SpecifiedRetryableErrorsRetryStrategy>(STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG, retryableErrors, 3/*maxRetries*/);
-
-    m_client = Aws::MakeUnique<Aws::Internal::STSCredentialsClient>(STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG, config);
+    m_client = Aws::MakeUnique<Aws::Internal::STSCredentialsClient>(STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG, clientConfiguration);
     m_initialized = true;
     AWS_LOGSTREAM_INFO(STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG, "Creating STS AssumeRole with web identity creds provider.");
 }
